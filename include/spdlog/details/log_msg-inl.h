@@ -33,5 +33,26 @@ SPDLOG_INLINE log_msg::log_msg(string_view_t a_logger_name, spdlog::level::level
     : log_msg(os::now(), source_loc{}, a_logger_name, lvl, msg)
 {}
 
+#ifndef SPDLOG_NO_ATTRIBUTES
+SPDLOG_INLINE log_msg::log_msg(spdlog::log_clock::time_point log_time, spdlog::source_loc loc, string_view_t a_logger_name,
+    spdlog::level::level_enum lvl, spdlog::string_view_t msg, attribute_list attrs)
+    : logger_name(a_logger_name)
+    , level(lvl)
+    , time(log_time)
+#ifndef SPDLOG_NO_THREAD_ID
+    , thread_id(os::thread_id())
+#endif
+    , source(loc)
+    , payload(msg)
+    , attributes(attrs)
+{}
+
+SPDLOG_INLINE log_msg::log_msg(
+    spdlog::source_loc loc, string_view_t a_logger_name, spdlog::level::level_enum lvl, spdlog::string_view_t msg,
+    attribute_list attrs)
+    : log_msg(os::now(), loc, a_logger_name, lvl, msg, attrs)
+{}
+#endif
+
 } // namespace details
 } // namespace spdlog
