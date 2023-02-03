@@ -122,6 +122,7 @@ option(
     SPDLOG_NO_ATOMIC_LEVELS
     "prevent spdlog from using of std::atomic log levels (use only if your code never modifies log levels concurrently"
     OFF)
+option(SPDLOG_NO_ATTRIBUTES "Disable attribute support in log messages" OFF)
 option(SPDLOG_DISABLE_DEFAULT_LOGGER "Disable default logger creation" OFF)
 
 # clang-tidy
@@ -238,6 +239,7 @@ foreach(
     SPDLOG_NO_THREAD_ID
     SPDLOG_NO_TLS
     SPDLOG_NO_ATOMIC_LEVELS
+    SPDLOG_NO_ATTRIBUTES
     SPDLOG_DISABLE_DEFAULT_LOGGER
     SPDLOG_USE_STD_FORMAT)
     if(${SPDLOG_OPTION})
