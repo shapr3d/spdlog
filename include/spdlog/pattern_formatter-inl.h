@@ -1076,6 +1076,20 @@ SPDLOG_INLINE void pattern_formatter::format(const details::log_msg &msg, memory
     {
         f->format(msg, cached_tm_, dest);
     }
+
+    // write attributes
+    if (msg.attributes.size() > 0) {
+        dest.push_back(' ');
+        dest.push_back('$');
+    }
+    for (const auto& attr : msg.attributes)
+    {
+        dest.push_back(' ');
+        details::fmt_helper::append_string_view(attr.name, dest);
+        dest.push_back('=');
+        details::fmt_helper::append_string_view(attr.value, dest);
+    }
+
     // write eol
     details::fmt_helper::append_string_view(eol_, dest);
 }

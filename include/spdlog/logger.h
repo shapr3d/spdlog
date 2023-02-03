@@ -297,6 +297,69 @@ public:
         log(level::critical, msg);
     }
 
+#ifndef SPDLOG_NO_ATTRIBUTES
+    void log(log_clock::time_point log_time, source_loc loc, level::level_enum lvl, string_view_t msg, attribute_list attrs)
+    {
+        bool log_enabled = should_log(lvl);
+        bool traceback_enabled = tracer_.enabled();
+        if (!log_enabled && !traceback_enabled)
+        {
+            return;
+        }
+
+        details::log_msg log_msg(log_time, loc, name_, lvl, msg, attrs);
+        log_it_(log_msg, log_enabled, traceback_enabled);
+    }
+
+    void log(source_loc loc, level::level_enum lvl, string_view_t msg, attribute_list attrs)
+    {
+        bool log_enabled = should_log(lvl);
+        bool traceback_enabled = tracer_.enabled();
+        if (!log_enabled && !traceback_enabled)
+        {
+            return;
+        }
+
+        details::log_msg log_msg(loc, name_, lvl, msg, attrs);
+        log_it_(log_msg, log_enabled, traceback_enabled);
+    }
+
+    void log(level::level_enum lvl, string_view_t msg, attribute_list attrs)
+    {
+        log(source_loc{}, lvl, msg, attrs);
+    }
+
+    void trace(string_view_t msg, attribute_list attrs)
+    {
+        log(level::trace, msg, attrs);
+    }
+
+    void debug(string_view_t msg, attribute_list attrs)
+    {
+        log(level::debug, msg, attrs);
+    }
+
+    void info(string_view_t msg, attribute_list attrs)
+    {
+        log(level::info, msg, attrs);
+    }
+
+    void warn(string_view_t msg, attribute_list attrs)
+    {
+        log(level::warn, msg, attrs);
+    }
+
+    void error(string_view_t msg, attribute_list attrs)
+    {
+        log(level::err, msg, attrs);
+    }
+
+    void critical(string_view_t msg, attribute_list attrs)
+    {
+        log(level::critical, msg, attrs);
+    }
+#endif
+
     // return true logging is enabled for the given level.
     bool should_log(level::level_enum msg_level) const
     {

@@ -306,6 +306,19 @@ struct source_loc
     const char *funcname{nullptr};
 };
 
+struct attribute {
+    string_view_t name;
+    std::string value;
+
+    template<typename T>
+    attribute(string_view_t name, const T& v)
+        : name(name)
+        , value(fmt::to_string(v))
+    {}
+};
+
+using attribute_list = std::initializer_list<attribute>;
+
 struct file_event_handlers
 {
     file_event_handlers()

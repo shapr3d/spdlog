@@ -5,6 +5,7 @@
 
 #include <spdlog/common.h>
 #include <string>
+#include <span>
 
 namespace spdlog {
 namespace details {
@@ -28,6 +29,13 @@ struct SPDLOG_API log_msg
 
     source_loc source;
     string_view_t payload;
+
+#ifndef SPDLOG_NO_ATTRIBUTES
+    log_msg(log_clock::time_point log_time, source_loc loc, string_view_t logger_name, level::level_enum lvl, string_view_t msg, attribute_list attrs);
+    log_msg(source_loc loc, string_view_t logger_name, level::level_enum lvl, string_view_t msg, attribute_list attrs);
+
+    std::span<const attribute> attributes;
+#endif
 };
 } // namespace details
 } // namespace spdlog
