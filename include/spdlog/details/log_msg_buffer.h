@@ -4,6 +4,7 @@
 #pragma once
 
 #include <spdlog/details/log_msg.h>
+#include <vector>
 
 namespace spdlog {
 namespace details {
@@ -14,7 +15,10 @@ namespace details {
 class SPDLOG_API log_msg_buffer : public log_msg
 {
     memory_buf_t buffer;
-    void update_string_views();
+    std::vector<attribute> attributes_buffer;
+
+    void store_payload();
+    void update_views();
 
 public:
     log_msg_buffer() = default;
