@@ -316,7 +316,6 @@ struct source_loc {
     const char *funcname{nullptr};
 };
 
-<<<<<<< HEAD
 struct attribute {
     string_view_t name;
     std::string value;
@@ -330,11 +329,7 @@ struct attribute {
 
 using attribute_list = std::initializer_list<attribute>;
 
-struct file_event_handlers
-{
-=======
 struct file_event_handlers {
->>>>>>> v1.x
     file_event_handlers()
         : before_open(nullptr),
           after_open(nullptr),
