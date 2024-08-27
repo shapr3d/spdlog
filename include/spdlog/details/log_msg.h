@@ -9,10 +9,13 @@
 
 namespace spdlog {
 namespace details {
-struct SPDLOG_API log_msg
-{
+struct SPDLOG_API log_msg {
     log_msg() = default;
-    log_msg(log_clock::time_point log_time, source_loc loc, string_view_t logger_name, level::level_enum lvl, string_view_t msg);
+    log_msg(log_clock::time_point log_time,
+            source_loc loc,
+            string_view_t logger_name,
+            level::level_enum lvl,
+            string_view_t msg);
     log_msg(source_loc loc, string_view_t logger_name, level::level_enum lvl, string_view_t msg);
     log_msg(string_view_t logger_name, level::level_enum lvl, string_view_t msg);
     log_msg(const log_msg &other) = default;
@@ -37,9 +40,9 @@ struct SPDLOG_API log_msg
     std::span<const attribute> attributes;
 #endif
 };
-} // namespace details
-} // namespace spdlog
+}  // namespace details
+}  // namespace spdlog
 
 #ifdef SPDLOG_HEADER_ONLY
-#    include "log_msg-inl.h"
+    #include "log_msg-inl.h"
 #endif
