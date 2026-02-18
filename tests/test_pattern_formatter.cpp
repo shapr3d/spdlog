@@ -1,5 +1,7 @@
 #include "includes.h"
 #include "test_sink.h"
+#include <regex>
+#include <chrono>
 
 using spdlog::memory_buf_t;
 using spdlog::details::to_string_view;
@@ -16,6 +18,23 @@ static std::string log_to_str(const std::string &msg, const Args &...args) {
         std::unique_ptr<spdlog::formatter>(new spdlog::pattern_formatter(args...)));
 
     oss_logger.info(msg);
+    return oss.str();
+}
+
+// log to str and return it with time
+template <typename... Args>
+static std::string log_to_str_with_time(spdlog::log_clock::time_point log_time,
+                                        const std::string &msg,
+                                        const Args &...args) {
+    std::ostringstream oss;
+    auto oss_sink = std::make_shared<spdlog::sinks::ostream_sink_mt>(oss);
+    spdlog::logger oss_logger("pattern_tester", oss_sink);
+    oss_logger.set_level(spdlog::level::info);
+
+    oss_logger.set_formatter(
+        std::unique_ptr<spdlog::formatter>(new spdlog::pattern_formatter(args...)));
+
+    oss_logger.log(log_time, {}, spdlog::level::info, msg);
     return oss.str();
 }
 
@@ -56,6 +75,22 @@ TEST_CASE("date MM/DD/YY ", "[pattern_formatter]") {
         << " Some message\n";
     REQUIRE(log_to_str("Some message", "%D %v", spdlog::pattern_time_type::local, "\n") ==
             oss.str());
+}
+
+// see test_timezone.cpp for actual UTC offset calculation tests
+TEST_CASE("UTC offset", "[pattern_formatter]") {
+    using namespace std::chrono_literals;
+    const auto now = std::chrono::system_clock::now();
+    std::string result =
+        log_to_str_with_time(now, "Some message", "%z", spdlog::pattern_time_type::local, "\n");
+
+#ifndef SPDLOG_NO_TZ_OFFSET
+    // Match format: +HH:MM or -HH:MM
+    std::regex re(R"([+-]\d{2}:[0-5]\d\n)");
+    REQUIRE(std::regex_match(result, re));
+#else
+    REQUIRE(result == "+??:??\n");
+#endif
 }
 
 TEST_CASE("color range test1", "[pattern_formatter]") {
@@ -501,6 +536,7 @@ TEST_CASE("override need_localtime", "[pattern_formatter]") {
     }
 }
 
+#ifndef SPDLOG_NO_TLS
 TEST_CASE("mdc formatter test-1", "[pattern_formatter]") {
     spdlog::mdc::put("mdc_key_1", "mdc_value_1");
     spdlog::mdc::put("mdc_key_2", "mdc_value_2");
@@ -628,3 +664,4 @@ TEST_CASE("mdc empty", "[pattern_formatter]") {
 
     SECTION("Tear down") { spdlog::mdc::clear(); }
 }
+#endif
