@@ -19,7 +19,11 @@ include(GNUInstallDirs)
 # Set default build to release
 # ---------------------------------------------------------------------------------------
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
-    set(CMAKE_BUILD_TYPE "Release" CACHE STRING "Choose Release or Debug" FORCE)
+    # Set CMAKE_BUILD_TYPE only if this project is top-level
+    if((DEFINED PROJECT_IS_TOP_LEVEL AND PROJECT_IS_TOP_LEVEL) OR (NOT DEFINED PROJECT_IS_TOP_LEVEL
+                                                                   AND CMAKE_SOURCE_DIR STREQUAL PROJECT_SOURCE_DIR))
+        set(CMAKE_BUILD_TYPE "Release" CACHE STRING "Choose Release or Debug" FORCE)
+    endif()
 endif()
 
 # ---------------------------------------------------------------------------------------
@@ -31,11 +35,6 @@ if(SPDLOG_USE_STD_FORMAT)
 elseif(NOT CMAKE_CXX_STANDARD)
     set(CMAKE_CXX_STANDARD 11)
     set(CMAKE_CXX_STANDARD_REQUIRED ON)
-endif()
-
-# make sure __cplusplus is defined when using msvc and enable parallel build
-if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
-    string(APPEND CMAKE_CXX_FLAGS " /Zc:__cplusplus /MP")
 endif()
 
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -67,6 +66,9 @@ option(SPDLOG_ENABLE_PCH "Build static or shared library using precompiled heade
 # build position independent code
 option(SPDLOG_BUILD_PIC "Build position independent code (-fPIC)" OFF)
 
+# debug build postfix
+set(SPDLOG_DEBUG_POSTFIX "d" CACHE STRING "Filename postfix for libraries in debug builds")
+
 # example options
 option(SPDLOG_BUILD_EXAMPLE "Build example" ${SPDLOG_MASTER_PROJECT})
 option(SPDLOG_BUILD_EXAMPLE_HO "Build header only example" OFF)
@@ -80,6 +82,10 @@ option(SPDLOG_BUILD_BENCH "Build benchmarks (Requires https://github.com/google/
 
 # sanitizer options
 option(SPDLOG_SANITIZE_ADDRESS "Enable address sanitizer in tests" OFF)
+option(SPDLOG_SANITIZE_THREAD "Enable thread sanitizer in tests" OFF)
+if(SPDLOG_SANITIZE_ADDRESS AND SPDLOG_SANITIZE_THREAD)
+    message(FATAL_ERROR "SPDLOG_SANITIZE_ADDRESS and SPDLOG_SANITIZE_THREAD are mutually exclusive")
+endif()
 
 # warning options
 option(SPDLOG_BUILD_WARNINGS "Enable compiler warnings" OFF)
@@ -91,6 +97,7 @@ option(SPDLOG_USE_STD_FORMAT "Use std::format instead of fmt library." OFF)
 option(SPDLOG_FMT_EXTERNAL "Use external fmt library instead of bundled" OFF)
 option(SPDLOG_FMT_EXTERNAL_HO "Use external fmt header-only library instead of bundled" OFF)
 option(SPDLOG_NO_EXCEPTIONS "Compile with -fno-exceptions. Call abort() on any spdlog exceptions" OFF)
+option(SPDLOG_NO_TZ_OFFSET "Omit %z timezone offset (use on platforms without tm_gmtoff)" OFF)
 
 if(SPDLOG_FMT_EXTERNAL AND SPDLOG_FMT_EXTERNAL_HO)
     message(FATAL_ERROR "SPDLOG_FMT_EXTERNAL and SPDLOG_FMT_EXTERNAL_HO are mutually exclusive")
@@ -115,6 +122,10 @@ else()
     set(SPDLOG_WCHAR_CONSOLE OFF CACHE BOOL "non supported option" FORCE)
 endif()
 
+if(MSVC)
+    option(SPDLOG_MSVC_UTF8 "Enable/disable msvc /utf-8 flag required by fmt lib" ON)
+endif()
+
 if(${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
     option(SPDLOG_CLOCK_COARSE "Use CLOCK_REALTIME_COARSE instead of the regular clock," OFF)
 else()
@@ -130,6 +141,7 @@ option(
     OFF)
 option(SPDLOG_NO_ATTRIBUTES "Disable attribute support in log messages" OFF)
 option(SPDLOG_DISABLE_DEFAULT_LOGGER "Disable default logger creation" OFF)
+option(SPDLOG_FWRITE_UNLOCKED "Use the unlocked variant of fwrite. Leave this on unless your libc doesn't have it" ON)
 
 # clang-tidy
 option(SPDLOG_TIDY "run clang-tidy" OFF)
@@ -188,12 +200,19 @@ spdlog_enable_warnings(spdlog)
 
 set_target_properties(spdlog PROPERTIES VERSION ${SPDLOG_VERSION} SOVERSION
                                                                   ${SPDLOG_VERSION_MAJOR}.${SPDLOG_VERSION_MINOR})
-set_target_properties(spdlog PROPERTIES DEBUG_POSTFIX d)
+set_target_properties(spdlog PROPERTIES DEBUG_POSTFIX ${SPDLOG_DEBUG_POSTFIX})
 set_target_properties(spdlog PROPERTIES VISIBILITY_INLINES_HIDDEN ON)
 
 if(COMMAND target_precompile_headers AND SPDLOG_ENABLE_PCH)
     configure_file(${CMAKE_CURRENT_SOURCE_DIR}/cmake/pch.h.in ${PROJECT_BINARY_DIR}/spdlog_pch.h @ONLY)
     target_precompile_headers(spdlog PRIVATE ${PROJECT_BINARY_DIR}/spdlog_pch.h)
+endif()
+
+# sanitizer support
+if(SPDLOG_SANITIZE_ADDRESS)
+    spdlog_enable_addr_sanitizer(spdlog)
+elseif(SPDLOG_SANITIZE_THREAD)
+    spdlog_enable_thread_sanitizer(spdlog)
 endif()
 
 # ---------------------------------------------------------------------------------------
@@ -217,7 +236,7 @@ if(SPDLOG_FMT_EXTERNAL OR SPDLOG_FMT_EXTERNAL_HO)
     target_compile_definitions(spdlog PUBLIC SPDLOG_FMT_EXTERNAL)
     target_compile_definitions(spdlog_header_only INTERFACE SPDLOG_FMT_EXTERNAL)
 
-    # use external fmt-header-nly
+    # use external fmt-header-only
     if(SPDLOG_FMT_EXTERNAL_HO)
         target_link_libraries(spdlog PUBLIC fmt::fmt-header-only)
         target_link_libraries(spdlog_header_only INTERFACE fmt::fmt-header-only)
@@ -227,6 +246,22 @@ if(SPDLOG_FMT_EXTERNAL OR SPDLOG_FMT_EXTERNAL_HO)
     endif()
 
     set(PKG_CONFIG_REQUIRES fmt) # add dependency to pkg-config
+endif()
+
+# ---------------------------------------------------------------------------------------
+# Check if fwrite_unlocked/_fwrite_nolock is available
+# ---------------------------------------------------------------------------------------
+if(SPDLOG_FWRITE_UNLOCKED)
+    include(CheckSymbolExists)
+    if(WIN32)
+        check_symbol_exists(_fwrite_nolock "stdio.h" HAVE_FWRITE_UNLOCKED)
+    else()
+        check_symbol_exists(fwrite_unlocked "stdio.h" HAVE_FWRITE_UNLOCKED)
+    endif()
+    if(HAVE_FWRITE_UNLOCKED)
+        target_compile_definitions(spdlog PRIVATE SPDLOG_FWRITE_UNLOCKED)
+        target_compile_definitions(spdlog_header_only INTERFACE SPDLOG_FWRITE_UNLOCKED)
+    endif()
 endif()
 
 # ---------------------------------------------------------------------------------------
@@ -255,24 +290,39 @@ foreach(
     SPDLOG_NO_ATOMIC_LEVELS
     SPDLOG_NO_ATTRIBUTES
     SPDLOG_DISABLE_DEFAULT_LOGGER
-    SPDLOG_USE_STD_FORMAT)
+    SPDLOG_USE_STD_FORMAT
+    SPDLOG_NO_TZ_OFFSET)
     if(${SPDLOG_OPTION})
         target_compile_definitions(spdlog PUBLIC ${SPDLOG_OPTION})
         target_compile_definitions(spdlog_header_only INTERFACE ${SPDLOG_OPTION})
     endif()
 endforeach()
 
+if(MSVC)
+    target_compile_options(spdlog PRIVATE "/Zc:__cplusplus")
+    target_compile_options(spdlog_header_only INTERFACE "/Zc:__cplusplus")
+    if(SPDLOG_MSVC_UTF8)
+        # fmtlib requires the /utf-8 flag when building with msvc. see https://github.com/fmtlib/fmt/pull/4159 on the
+        # purpose of the additional
+        # "$<$<AND:$<COMPILE_LANGUAGE:CXX>,$<CXX_COMPILER_ID:MSVC>>"
+        target_compile_options(spdlog PUBLIC $<$<AND:$<COMPILE_LANGUAGE:CXX>,$<CXX_COMPILER_ID:MSVC>>:/utf-8>)
+        target_compile_options(spdlog_header_only
+                               INTERFACE $<$<AND:$<COMPILE_LANGUAGE:CXX>,$<CXX_COMPILER_ID:MSVC>>:/utf-8>)
+    endif()
+endif()
+
 # ---------------------------------------------------------------------------------------
 # If exceptions are disabled, disable them in the bundled fmt as well
 # ---------------------------------------------------------------------------------------
 if(SPDLOG_NO_EXCEPTIONS)
     if(NOT SPDLOG_FMT_EXTERNAL AND NOT SPDLOG_FMT_EXTERNAL_HO)
-        target_compile_definitions(spdlog PUBLIC FMT_EXCEPTIONS=0)
+        target_compile_definitions(spdlog PUBLIC FMT_USE_EXCEPTIONS=0)
     endif()
     if(NOT MSVC)
         target_compile_options(spdlog PRIVATE -fno-exceptions)
     else()
         target_compile_options(spdlog PRIVATE /EHs-c-)
+        target_compile_definitions(spdlog PRIVATE _HAS_EXCEPTIONS=0)
     endif()
 endif()
 # ---------------------------------------------------------------------------------------
